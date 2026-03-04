@@ -1,0 +1,28 @@
+# .NET 빌드 아티팩트
+Tests/bin/
+Tests/obj/
+
+# Unity 빌드 아티팩트
+[Ll]ibrary/
+[Tt]emp/
+[Oo]bj/
+[Bb]uild/
+[Bb]uilds/
+[Ll]ogs/
+[Mm]emoryCaptures/
+UserSettings/
+
+# Visual Studio 캐시/옵션
+.vs/
+*.csproj.user
+*.pidb
+*.booproj
+*.svd
+*.pdb
+*.mdb
+*.opendb
+
+# OS 관련
+.DS_Store
+Thumbs.db
+Desktop.ini
