@@ -4,6 +4,63 @@
 
 ---
 
+## ⚡ 빠른 시작 (3단계로 끝내기)
+
+> **`cd Tests` / `dotnet test`는 내 PC의 터미널(명령 프롬프트)에서 실행하는 명령어다.**
+> Unity Editor가 아니라, 아래 순서대로 따라하면 된다.
+
+---
+
+### 1단계 — 터미널(명령 프롬프트) 열기
+
+| 운영체제 | 방법 |
+|---------|------|
+| **Windows** | 시작 메뉴 → `cmd` 또는 `PowerShell` 검색 → 실행 |
+| **Mac** | Finder → 응용 프로그램 → 유틸리티 → **터미널** 실행 |
+| **VS Code 사용 중이라면** | 상단 메뉴 → **터미널** → **새 터미널** |
+
+---
+
+### 2단계 — 저장소 폴더로 이동
+
+터미널에 아래 명령어를 입력한다.  
+(저장소를 어디에 받았느냐에 따라 경로가 다르다)
+
+```bash
+# 예시: 바탕화면에 클론한 경우
+# Windows
+cd C:\Users\내이름\Desktop\gmDefense
+
+# Mac / Linux
+cd ~/Desktop/gmDefense
+```
+
+> 아직 저장소가 없다면 먼저 `git clone`으로 받아야 한다:
+> ```bash
+> git clone https://github.com/aseohyowon/gmDefense.git
+> cd gmDefense
+> ```
+
+---
+
+### 3단계 — 테스트 실행
+
+```bash
+cd Tests
+dotnet test
+```
+
+**예상 결과:**
+
+```
+Passed!  - Failed: 0, Passed: 60, Skipped: 0, Total: 60, Duration: ~50ms
+```
+
+> ❓ `dotnet` 명령어를 찾을 수 없다는 오류가 나면 아래 링크에서 설치:  
+> 👉 https://dotnet.microsoft.com/download (.NET 8.0 SDK)
+
+---
+
 ## 📋 테스트 구조
 
 ```
@@ -25,16 +82,26 @@ Tests/
 
 ## ▶️ 방법 1: `dotnet test` 로 단위 테스트 실행 (Unity 불필요)
 
+> 위의 **빠른 시작** 3단계를 그대로 따라하면 된다.
+
 ### 사전 요구사항
 - [.NET 8.0 SDK](https://dotnet.microsoft.com/download) 설치
 
-### 실행 방법
+### 전체 명령어 (복사·붙여넣기용)
 
 ```bash
-# 프로젝트 루트에서
+# ① 저장소 루트에서 Tests 폴더로 이동
 cd Tests
+
+# ② 테스트 실행
 dotnet test
 ```
+
+> 💡 **현재 위치 확인법**
+> - Windows: `cd` 입력 후 Enter → 현재 경로 표시
+> - Mac/Linux: `pwd` 입력 후 Enter → 현재 경로 표시
+>
+> **`gmDefense` 폴더 안에 있어야 `cd Tests`가 동작한다.**
 
 ### 예상 출력
 
