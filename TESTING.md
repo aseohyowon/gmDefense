@@ -4,10 +4,28 @@
 
 ---
 
-## ⚡ 빠른 시작 (3단계로 끝내기)
+## ⚡ 빠른 시작 (4단계로 끝내기)
 
 > **`cd Tests` / `dotnet test`는 내 PC의 터미널(명령 프롬프트)에서 실행하는 명령어다.**
 > Unity Editor가 아니라, 아래 순서대로 따라하면 된다.
+
+---
+
+### 0단계 — .NET SDK 설치 ✅ (딱 한 번만 하면 됨)
+
+> ⚠️ **이 단계를 건너뛰면 `No .NET SDKs were found` 오류가 발생한다.**
+
+1. 👉 **https://dotnet.microsoft.com/ko-kr/download** 접속
+2. **".NET 8.0 다운로드"** 버튼 클릭 → `dotnet-sdk-8.x.x-win-x64.exe` 다운로드
+3. 다운로드한 `.exe` 파일 실행 → **설치** 완료
+4. 터미널(PowerShell/cmd)을 **완전히 닫았다가 다시 열기**
+5. 아래 명령어로 설치 확인:
+
+```powershell
+dotnet --version
+```
+
+출력 예시: `8.0.xxx` 처럼 숫자가 나오면 설치 성공 ✅
 
 ---
 
@@ -56,8 +74,8 @@ dotnet test
 Passed!  - Failed: 0, Passed: 60, Skipped: 0, Total: 60, Duration: ~50ms
 ```
 
-> ❓ `dotnet` 명령어를 찾을 수 없다는 오류가 나면 아래 링크에서 설치:  
-> 👉 https://dotnet.microsoft.com/download (.NET 8.0 SDK)
+> ❓ `No .NET SDKs were found` 오류가 나면 → **0단계로 돌아가서 .NET SDK를 먼저 설치**한다.  
+> ❓ `The application 'test' does not exist` 오류도 같은 원인이다 → .NET SDK 설치 필요.
 
 ---
 
@@ -236,7 +254,27 @@ Unity 내장 테스트 러너를 사용하여 에디터에서 테스트한다.
 
 ## 🔧 문제 해결
 
-### `dotnet test` 실패 시
+### ❌ `No .NET SDKs were found` / `The application 'test' does not exist` 오류
+
+이 오류는 **.NET SDK가 PC에 설치되어 있지 않을 때** 발생한다.
+
+**해결 방법 (Windows 기준):**
+
+1. 👉 **https://dotnet.microsoft.com/ko-kr/download** 접속
+2. **".NET 8.0"** 항목의 **SDK 다운로드** 클릭
+3. `dotnet-sdk-8.x.x-win-x64.exe` 실행 → 설치 진행
+4. 설치 완료 후 PowerShell/cmd 창을 **완전히 닫고** 새로 열기
+5. `dotnet --version` 입력 → `8.0.xxx` 숫자가 나오면 설치 성공
+
+**이후 다시 실행:**
+```powershell
+cd gmDefense\Tests
+dotnet test
+```
+
+---
+
+### `dotnet test` 기타 실패 시
 
 ```bash
 # .NET 버전 확인
