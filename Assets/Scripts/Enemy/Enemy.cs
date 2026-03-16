@@ -1,182 +1,279 @@
-// Enemy.cs
-// 적 캐릭터의 기본 동작을 정의하는 클래스.
-// 경로를 따라 이동하고, 체력 관리 및 사망 처리를 담당한다.
-
-using System;
 using UnityEngine;
+using S2RD.Core;
+using System.Linq;
 
-namespace GMDefense.Enemy
+namespace S2RD.Enemy
 {
     /// <summary>
-    /// 적 기본 추상 클래스.
-    /// 모든 적 타입이 상속받아야 하는 공통 기능을 정의한다.
+    /// 일반 몬스터의 이동/피격 처리를 담당합니다.
     /// </summary>
-    public class EnemyBase : MonoBehaviour
+    public class Enemy : MonoBehaviour
     {
-        [Header("적 기본 스탯")]
-        [Tooltip("최대 체력")]
-        [SerializeField] protected float 최대체력 = 100f;
-
-        [Tooltip("이동 속도")]
-        [SerializeField] protected float 이동속도 = 2f;
-
-        [Tooltip("성문 도달 시 감소할 플레이어 HP")]
-        [SerializeField] protected int 성문피해량 = 1;
-
-        [Tooltip("처치 시 획득 골드")]
-        [SerializeField] protected int 획득골드 = 10;
-
-        // 현재 체력
-        protected float _현재체력;
-        // 이동 경로 포인트 목록
-        protected Transform[] _경로포인트;
-        // 현재 향하는 경로 인덱스
-        protected int _현재경로인덱스 = 0;
-        // 이미 처치되었는지 여부 (중복 처리 방지)
-        private bool _처치됨 = false;
-
-        // 적 사망 이벤트 (처치 골드 전달)
-        public event Action<int> 사망이벤트;
-        // 성문 도달 이벤트 (피해량 전달)
-        public event Action<int> 성문도달이벤트;
-
-        protected virtual void Awake()
+        // ──── 애니메이션 타일 인덱스 (44열×24행, 32×32 px) ────
+        // Idle Stand: tile_rows 2-5, 6프레임 (col 간격 6~7)
+        private static readonly string[][] 몬스터아이들타일 =
         {
-            _현재체력 = 최대체력;
+            new[] { "monster_clean_91",  "monster_clean_92",
+                    "monster_clean_135", "monster_clean_136", "monster_clean_137",
+                    "monster_clean_178", "monster_clean_179", "monster_clean_180", "monster_clean_181",
+                    "monster_clean_222", "monster_clean_223", "monster_clean_224", "monster_clean_225" },
+            new[] { "monster_clean_97",  "monster_clean_98",
+                    "monster_clean_141", "monster_clean_142", "monster_clean_143",
+                    "monster_clean_184", "monster_clean_185", "monster_clean_186", "monster_clean_187",
+                    "monster_clean_228", "monster_clean_229", "monster_clean_230", "monster_clean_231" },
+            new[] { "monster_clean_103", "monster_clean_104",
+                    "monster_clean_147", "monster_clean_148", "monster_clean_149",
+                    "monster_clean_190", "monster_clean_191", "monster_clean_192", "monster_clean_193",
+                    "monster_clean_234", "monster_clean_235", "monster_clean_236", "monster_clean_237" },
+        };
+
+        // Walk: tile_rows 9-12, 6프레임 (col 간격 6~8)
+        private static readonly string[][] 몬스터걷기타일 =
+        {
+            new[] { "monster_clean_399", "monster_clean_400",
+                    "monster_clean_443", "monster_clean_444", "monster_clean_445",
+                    "monster_clean_486", "monster_clean_487", "monster_clean_488", "monster_clean_489",
+                    "monster_clean_530", "monster_clean_531", "monster_clean_532", "monster_clean_533" },
+            new[] { "monster_clean_405", "monster_clean_406",
+                    "monster_clean_449", "monster_clean_450", "monster_clean_451",
+                    "monster_clean_492", "monster_clean_493", "monster_clean_494", "monster_clean_495",
+                    "monster_clean_536", "monster_clean_537", "monster_clean_538", "monster_clean_539" },
+            new[] { "monster_clean_411", "monster_clean_412",
+                    "monster_clean_455", "monster_clean_456", "monster_clean_457",
+                    "monster_clean_498", "monster_clean_499", "monster_clean_500", "monster_clean_501",
+                    "monster_clean_542", "monster_clean_543", "monster_clean_544", "monster_clean_545" },
+            new[] { "monster_clean_422", "monster_clean_423",
+                    "monster_clean_466", "monster_clean_467", "monster_clean_468",
+                    "monster_clean_509", "monster_clean_510", "monster_clean_511", "monster_clean_512",
+                    "monster_clean_553", "monster_clean_554", "monster_clean_555", "monster_clean_556" },
+            new[] { "monster_clean_428", "monster_clean_429",
+                    "monster_clean_472", "monster_clean_473", "monster_clean_474",
+                    "monster_clean_515", "monster_clean_516", "monster_clean_517", "monster_clean_518",
+                    "monster_clean_559", "monster_clean_560", "monster_clean_561", "monster_clean_562" },
+            new[] { "monster_clean_434", "monster_clean_435",
+                    "monster_clean_478", "monster_clean_479", "monster_clean_480",
+                    "monster_clean_521", "monster_clean_522", "monster_clean_523", "monster_clean_524",
+                    "monster_clean_565", "monster_clean_566", "monster_clean_567", "monster_clean_568" },
+        };
+
+        protected float 최대체력;
+        protected float 현재체력;
+        protected float 이동속도;
+        protected int 공격력;
+        protected int 골드드랍값;
+
+        private Vector3[] _경로포인트;
+        private int _현재경로인덱스;
+        private SpriteRenderer _renderer;
+        private PixelSpriteAnimator _animator;
+
+        public int 골드드랍 => 골드드랍값;
+        public bool 사망여부 => 현재체력 <= 0f;
+        public bool 경로종료도달여부 => _경로포인트 != null && _경로포인트.Length > 0 && _현재경로인덱스 >= _경로포인트.Length;
+
+        public virtual void 초기화(float hp, float speed, int damage, int dropGold, Vector3[] pathPoints)
+        {
+            최대체력 = hp;
+            현재체력 = hp;
+            이동속도 = speed;
+            공격력 = damage;
+            골드드랍값 = dropGold;
+            _경로포인트 = pathPoints;
+            _현재경로인덱스 = 1;
+
+            _renderer = GetComponent<SpriteRenderer>();
+            if (_renderer == null)
+                _renderer = gameObject.AddComponent<SpriteRenderer>();
+
+            // ── 애니메이션 프레임 합성 (항상 실행) ──
+            Sprite[] idleFrames = SlicedCharacterComposer.ComposeAnimationFrames(
+                "monster_clean", 32f, "Monster_idle", 몬스터아이들타일);
+            Sprite[] walkFrames = SlicedCharacterComposer.ComposeAnimationFrames(
+                "monster_clean", 32f, "Monster_walk", 몬스터걷기타일);
+
+            if (idleFrames != null && idleFrames.Length > 0)
+            {
+                _renderer.sprite = idleFrames[0];
+                _animator = GetComponent<PixelSpriteAnimator>() ?? gameObject.AddComponent<PixelSpriteAnimator>();
+                _animator.프레임설정(idleFrames, walkFrames ?? idleFrames, idleFrames);
+                Debug.Log($"[Monster Anim] idle={idleFrames.Length}frames, walk={(walkFrames?.Length ?? 0)}frames");
+            }
+            else
+            {
+                // 폴백: 정적 스프라이트
+                _renderer.sprite = 대체몬스터스프라이트가져오기(this is BossEnemy)
+                    ?? 몬스터스프라이트생성();
+            }
+
+            _renderer.color = Color.white;
+            _renderer.sortingOrder = 18;
+            _renderer.drawMode = SpriteDrawMode.Simple;
+            적용크기보정();
+
+            if (_renderer.sprite != null)
+                Debug.Log($"[Enemy Sprite Assigned] name={_renderer.sprite.name}, size={_renderer.sprite.rect.width}x{_renderer.sprite.rect.height}");
+            else
+                Debug.LogWarning("[Enemy Sprite Assigned] sprite is null after assignment.");
         }
 
-        protected virtual void Update()
+        public virtual void 이동업데이트()
         {
-            경로이동();
-        }
+            if (_경로포인트 == null || _경로포인트.Length == 0 || 사망여부)
+                return;
 
-        /// <summary>
-        /// 적을 초기화하고 이동 경로를 설정한다.
-        /// </summary>
-        /// <param name="경로">이동할 웨이포인트 배열</param>
-        public virtual void 초기화(Transform[] 경로)
-        {
-            _경로포인트 = 경로;
-            _현재경로인덱스 = 0;
-            _현재체력 = 최대체력;
-            _처치됨 = false;
-        }
-
-        /// <summary>
-        /// 경로를 따라 이동한다.
-        /// </summary>
-        protected virtual void 경로이동()
-        {
-            if (_경로포인트 == null || _경로포인트.Length == 0) return;
             if (_현재경로인덱스 >= _경로포인트.Length)
             {
-                성문도달처리();
+                if (_animator != null)
+                    _animator.상태설정이동(false);
                 return;
             }
 
-            Transform 목표 = _경로포인트[_현재경로인덱스];
-            if (목표 == null) return;
+            Vector3 target = _경로포인트[_현재경로인덱스];
+            Vector3 toTarget = target - transform.position;
 
-            transform.position = Vector2.MoveTowards(
-                transform.position,
-                목표.position,
-                이동속도 * Time.deltaTime
-            );
+            // 수평 이동 방향에 따라 스프라이트 반전 (왼쪽 이동 시 flipX)
+            if (_renderer != null && Mathf.Abs(toTarget.x) > 0.01f)
+                _renderer.flipX = toTarget.x < 0f;
 
-            // 목표 포인트에 충분히 가까워지면 다음 포인트로
-            if (Vector2.Distance(transform.position, 목표.position) < 0.05f)
-                _현재경로인덱스++;
-        }
+            float step = 이동속도 * Time.deltaTime;
 
-        /// <summary>
-        /// 데미지를 받는다.
-        /// </summary>
-        /// <param name="데미지량">입힐 데미지 수치</param>
-        public virtual void 데미지받기(float 데미지량)
-        {
-            if (_처치됨) return;
-
-            _현재체력 -= 데미지량;
-            _현재체력 = Mathf.Max(0f, _현재체력);
-
-            if (_현재체력 <= 0f)
-                사망처리();
-        }
-
-        /// <summary>
-        /// 적이 사망했을 때의 처리.
-        /// </summary>
-        protected virtual void 사망처리()
-        {
-            if (_처치됨) return;
-            _처치됨 = true;
-
-            사망이벤트?.Invoke(획득골드);
-            Debug.Log($"[적] '{gameObject.name}' 사망. 획득 골드: {획득골드}");
-
-            Destroy(gameObject);
-        }
-
-        /// <summary>
-        /// 적이 성문에 도달했을 때의 처리.
-        /// </summary>
-        protected virtual void 성문도달처리()
-        {
-            if (_처치됨) return;
-            _처치됨 = true;
-
-            성문도달이벤트?.Invoke(성문피해량);
-            Debug.Log($"[적] '{gameObject.name}' 성문 도달. 피해량: {성문피해량}");
-
-            Destroy(gameObject);
-        }
-
-        /// <summary>
-        /// 현재 체력 비율을 반환 (0 ~ 1).
-        /// </summary>
-        public float 체력비율 => 최대체력 > 0 ? _현재체력 / 최대체력 : 0f;
-    }
-
-    /// <summary>
-    /// 일반 적 클래스. EnemyBase를 상속받는 기본 구현체.
-    /// </summary>
-    public class NormalEnemy : EnemyBase
-    {
-        // 일반 적 특이 동작은 없음. EnemyBase 기본 동작 사용.
-    }
-
-    /// <summary>
-    /// 보스 적 클래스. 강화된 스탯과 특수 패턴을 가진다.
-    /// </summary>
-    public class BossEnemy : EnemyBase
-    {
-        [Header("보스 고유 설정")]
-        [Tooltip("보스 분노 임계치 (체력이 이 비율 이하로 떨어지면 가속)")]
-        [SerializeField] private float 분노임계치 = 0.3f;
-
-        [Tooltip("분노 상태의 이동속도 배율")]
-        [SerializeField] private float 분노이동속도배율 = 1.5f;
-
-        private bool _분노상태 = false;
-        private float _기본이동속도;
-
-        protected override void Awake()
-        {
-            base.Awake();
-            _기본이동속도 = 이동속도;
-        }
-
-        public override void 데미지받기(float 데미지량)
-        {
-            base.데미지받기(데미지량);
-
-            // 체력이 임계치 이하로 떨어지면 분노 상태 진입
-            if (!_분노상태 && 체력비율 <= 분노임계치)
+            if (toTarget.sqrMagnitude <= step * step)
             {
-                _분노상태 = true;
-                이동속도 = _기본이동속도 * 분노이동속도배율;
-                Debug.Log($"[보스] '{gameObject.name}' 분노 상태 진입! 이동속도 {이동속도:F1}");
+                transform.position = target;
+                _현재경로인덱스++;
+                if (_animator != null)
+                    _animator.상태설정이동(true);
+                return;
             }
+
+            transform.position += toTarget.normalized * step;
+            if (_animator != null)
+                _animator.상태설정이동(true);
+        }
+
+        public void 피해적용(float damage)
+        {
+            if (damage <= 0f || 사망여부)
+                return;
+
+            현재체력 = Mathf.Max(0f, 현재체력 - damage);
+        }
+
+        private static Sprite 몬스터스프라이트생성()
+        {
+            Sprite[] frames = PixelArtFactory.몬스터애니메이션프레임생성(new Color(0.88f, 0.22f, 0.25f, 1f), new Color(0.62f, 0.08f, 0.10f, 1f));
+            return frames != null && frames.Length > 0 ? frames[0] : null;
+        }
+
+        private static Sprite 대체몬스터스프라이트가져오기(bool isBoss)
+        {
+            string path = isBoss ? "Prefabs/Enemies/enemy_BossDragon" : "Prefabs/Enemies/enemy_goblin";
+            GameObject prefab = Resources.Load<GameObject>(path);
+            if (prefab == null)
+                return null;
+
+            SpriteRenderer sr = prefab.GetComponent<SpriteRenderer>();
+            return sr != null ? sr.sprite : null;
+        }
+
+        private static Sprite 전체텍스처스프라이트생성(Texture2D texture, string name)
+        {
+            if (texture == null)
+                return null;
+
+            Rect rect = new Rect(0f, 0f, texture.width, texture.height);
+            Vector2 pivot = new Vector2(0.5f, 0.5f);
+            Sprite sprite = Sprite.Create(texture, rect, pivot, 32f, 0, SpriteMeshType.FullRect);
+            sprite.name = name;
+            return sprite;
+        }
+
+        private static Sprite 첫가시프레임선택(Sprite[] sprites)
+        {
+            if (sprites == null || sprites.Length == 0)
+                return null;
+
+            for (int i = 0; i < sprites.Length; i++)
+            {
+                Sprite s = sprites[i];
+                if (s == null)
+                    continue;
+
+                if (가시스프라이트여부(s))
+                    return s;
+            }
+
+            return sprites[0];
+        }
+
+        private static int 스프라이트인덱스파싱(Sprite sprite)
+        {
+            if (sprite == null || string.IsNullOrEmpty(sprite.name))
+                return int.MaxValue;
+
+            int underscore = sprite.name.LastIndexOf('_');
+            if (underscore < 0 || underscore >= sprite.name.Length - 1)
+                return int.MaxValue;
+
+            return int.TryParse(sprite.name.Substring(underscore + 1), out int parsed)
+                ? parsed
+                : int.MaxValue;
+        }
+
+        private static bool 가시스프라이트여부(Sprite sprite)
+        {
+            if (sprite == null || sprite.texture == null)
+                return false;
+
+            Texture2D tex = sprite.texture;
+            if (!tex.isReadable)
+                return true;
+
+            Rect r = sprite.textureRect;
+            int x = Mathf.RoundToInt(r.x);
+            int y = Mathf.RoundToInt(r.y);
+            int w = Mathf.RoundToInt(r.width);
+            int h = Mathf.RoundToInt(r.height);
+
+            if (w <= 0 || h <= 0)
+                return false;
+
+            try
+            {
+                Color[] pixels = tex.GetPixels(x, y, w, h);
+                int alphaCount = 0;
+                for (int i = 0; i < pixels.Length; i++)
+                {
+                    if (pixels[i].a > 0.15f)
+                        alphaCount++;
+                }
+
+                return alphaCount > Mathf.Max(16, pixels.Length / 20);
+            }
+            catch
+            {
+                return true;
+            }
+        }
+
+        private void 적용크기보정()
+        {
+            if (_renderer == null || _renderer.sprite == null)
+            {
+                transform.localScale = new Vector3(1f, 1f, 1f);
+                return;
+            }
+
+            float spriteHeight = _renderer.sprite.bounds.size.y;
+            if (spriteHeight <= 0.0001f)
+            {
+                transform.localScale = new Vector3(1f, 1f, 1f);
+                return;
+            }
+
+            const float targetWorldHeight = 1.1f;
+            float scale = targetWorldHeight / spriteHeight;
+            transform.localScale = new Vector3(scale, scale, 1f);
         }
     }
 }

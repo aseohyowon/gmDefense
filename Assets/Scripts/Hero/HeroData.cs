@@ -1,106 +1,77 @@
-// HeroData.cs
-// 영웅의 기본 데이터를 ScriptableObject로 정의하는 클래스.
-// 영웅 종류, 레벨, 공격력, 공격속도, 사거리, 특성 등의 데이터를 담는다.
-
 using UnityEngine;
 
-namespace GMDefense.Heroes
+namespace S2RD.Hero
 {
     /// <summary>
-    /// 영웅 특성 종류 열거형.
-    /// </summary>
-    public enum TraitType
-    {
-        없음,
-        빛의수호자,     // 공격력 증가 시너지
-        어둠의사냥꾼,   // 공격속도 증가 시너지
-        자연의수호,     // 회복 시너지
-        불꽃전사,       // 광역 데미지 시너지
-        얼음마법사,     // 둔화 시너지
-        번개술사,       // 연쇄 공격 시너지
-        강철기사        // 방어력 증가 시너지
-    }
-
-    /// <summary>
-    /// 영웅 등급(성장 단계) 열거형. 총 7단계.
+    /// 영웅 등급입니다.
     /// </summary>
     public enum HeroGrade
     {
-        등급1 = 1,
-        등급2 = 2,
-        등급3 = 3,
-        등급4 = 4,
-        등급5 = 5,
-        등급6 = 6,
-        등급7 = 7
+        Common,
+        Rare,
+        Epic,
+        Legendary
     }
 
     /// <summary>
-    /// 영웅 종류 열거형.
+    /// 영웅 직업 타입입니다.
     /// </summary>
     public enum HeroType
     {
-        전사,
-        궁수,
-        마법사,
-        성기사,
-        암살자,
-        드루이드,
-        용병
+        Archer,
+        Knight,
+        Mage,
+        Lancer
     }
 
     /// <summary>
-    /// 영웅 데이터 ScriptableObject.
-    /// 영웅의 기본 스탯과 메타데이터를 정의한다.
+    /// 영웅의 전투 데이터를 담는 구조체입니다.
     /// </summary>
-    [CreateAssetMenu(fileName = "새영웅데이터", menuName = "GMDefense/영웅 데이터")]
-    public class HeroData : ScriptableObject
+    [System.Serializable]
+    public struct HeroData
     {
-        [Header("기본 정보")]
-        [Tooltip("영웅 이름")]
-        public string 영웅이름;
+        public int Level;
+        public HeroType Type;
+        public HeroGrade Grade;
+        public float AttackPower;
+        public float AttackRange;
+        public float AttackInterval;
 
-        [Tooltip("영웅 종류")]
-        public HeroType 영웅종류;
-
-        [Tooltip("영웅 등급 (1~7단계)")]
-        public HeroGrade 영웅등급 = HeroGrade.등급1;
-
-        [Header("전투 스탯")]
-        [Tooltip("기본 공격력")]
-        public float 공격력 = 10f;
-
-        [Tooltip("공격 속도 (초당 공격 횟수)")]
-        public float 공격속도 = 1f;
-
-        [Tooltip("공격 사거리")]
-        public float 사거리 = 3f;
-
-        [Header("특성")]
-        [Tooltip("영웅이 보유한 특성 목록")]
-        public TraitType[] 특성목록;
-
-        [Header("소환 정보")]
-        [Tooltip("소환 시 필요한 골드")]
-        public int 소환비용 = 100;
-
-        [Header("비주얼")]
-        [Tooltip("영웅 스프라이트")]
-        public Sprite 영웅스프라이트;
-
-        /// <summary>
-        /// 등급에 따른 실제 공격력을 계산하여 반환한다.
-        /// </summary>
-        public float 최종공격력 => 공격력 * (int)영웅등급;
-
-        /// <summary>
-        /// 두 영웅 데이터가 합성 가능한지 확인한다.
-        /// 같은 종류, 같은 등급이어야 합성 가능.
-        /// </summary>
-        public bool 합성가능(HeroData 대상)
+        public static HeroData 생성(HeroType type, HeroGrade grade)
         {
-            if (대상 == null) return false;
-            return 영웅종류 == 대상.영웅종류 && 영웅등급 == 대상.영웅등급;
+            return 생성(type, 1, grade);
+        }
+
+        public static HeroData 생성(HeroType type, int level)
+        {
+            HeroGrade grade = 레벨에따른등급(level);
+            return 생성(type, level, grade);
+        }
+
+        private static HeroData 생성(HeroType type, int level, HeroGrade grade)
+        {
+            float attack = 10f * Mathf.Pow(2f, Mathf.Max(0, level - 1));
+
+            return new HeroData
+            {
+                Level = Mathf.Max(1, level),
+                Type = type,
+                Grade = grade,
+                AttackPower = attack,
+                AttackRange = 3f,
+                AttackInterval = 1f
+            };
+        }
+
+        private static HeroGrade 레벨에따른등급(int level)
+        {
+            if (level >= 4)
+                return HeroGrade.Legendary;
+            if (level == 3)
+                return HeroGrade.Epic;
+            if (level == 2)
+                return HeroGrade.Rare;
+            return HeroGrade.Common;
         }
     }
 }

@@ -1,201 +1,209 @@
-// UIManager.cs
-// 게임 내 모든 UI 요소를 관리하는 클래스.
-// 골드, HP, 웨이브, 소환 버튼, 특성 시너지 표시를 담당한다.
-
 using UnityEngine;
 using UnityEngine.UI;
-using TMPro;
-using GMDefense.Core;
-using GMDefense.Systems;
-using GMDefense.Heroes;
 
-namespace GMDefense.UI
+namespace S2RD.UI
 {
     /// <summary>
-    /// UI 매니저.
-    /// 각 매니저의 이벤트를 구독하여 UI를 갱신한다.
+    /// 캔버스 기반 UI를 생성하고 게임 UI 이벤트를 전달합니다.
+    /// TopBar, BottomBar 구조로 확장 가능한 HUD를 제공합니다.
     /// </summary>
     public class UIManager : MonoBehaviour
     {
-        [Header("골드 UI")]
-        [Tooltip("현재 골드 텍스트")]
-        [SerializeField] private TextMeshProUGUI 골드텍스트;
+        private Text _waveText;
+        private Text _goldText;
+        private Text _lifeText;
+        private GameObject _gameOverPanel;
+        private Text _gameOverText;
+        private Button _mainMenuButton;
+        private Button _summonButton;
 
-        [Tooltip("소환 비용 텍스트")]
-        [SerializeField] private TextMeshProUGUI 소환비용텍스트;
+        public event System.Action 소환버튼클릭이벤트;
+        public event System.Action 메인메뉴버튼클릭이벤트;
 
-        [Header("플레이어 HP UI")]
-        [Tooltip("플레이어 HP 슬라이더")]
-        [SerializeField] private Slider HP슬라이더;
-
-        [Tooltip("플레이어 HP 텍스트 (숫자 표시)")]
-        [SerializeField] private TextMeshProUGUI HP텍스트;
-
-        [Header("웨이브 UI")]
-        [Tooltip("현재 웨이브 번호 텍스트")]
-        [SerializeField] private TextMeshProUGUI 웨이브텍스트;
-
-        [Tooltip("다음 웨이브까지 남은 시간 텍스트")]
-        [SerializeField] private TextMeshProUGUI 웨이브타이머텍스트;
-
-        [Header("특성 시너지 UI")]
-        [Tooltip("시너지 상태 텍스트")]
-        [SerializeField] private TextMeshProUGUI 시너지텍스트;
-
-        [Header("게임 상태 UI")]
-        [Tooltip("게임 오버 패널")]
-        [SerializeField] private GameObject 게임오버패널;
-
-        [Tooltip("일시정지 패널")]
-        [SerializeField] private GameObject 일시정지패널;
-
-        [Header("버튼")]
-        [Tooltip("영웅 소환 버튼")]
-        [SerializeField] private Button 소환버튼;
-
-        [Tooltip("일시정지 버튼")]
-        [SerializeField] private Button 일시정지버튼;
-
-        [Tooltip("게임 시작 버튼")]
-        [SerializeField] private Button 게임시작버튼;
-
-        private void Start()
+        private void Awake()
         {
-            이벤트구독();
-            초기UI설정();
+            Canvas canvas = 게임캔버스생성();
+            RectTransform topBar = TopBar생성(canvas.transform);
+            RectTransform bottomBar = BottomUI생성(canvas.transform);
+
+            _waveText = 텍스트생성(topBar, "WaveText", "Wave: 1", 34, TextAnchor.MiddleLeft, new Vector2(0f, 0.5f), new Vector2(300f, 60f), Color.white, new Vector2(26f, 0f));
+            _lifeText = 텍스트생성(topBar, "LifeText", "Life: 20", 34, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(300f, 60f), Color.white);
+            _goldText = 텍스트생성(topBar, "GoldText", "Gold: 0", 34, TextAnchor.MiddleRight, new Vector2(1f, 0.5f), new Vector2(360f, 60f), Color.white, new Vector2(-26f, 0f));
+            _summonButton = SummonButton생성(bottomBar).GetComponent<Button>();
+            게임오버패널생성(canvas.transform);
         }
 
-        private void OnDestroy()
+        private Canvas 게임캔버스생성()
         {
-            이벤트해제();
-        }
+            GameObject canvasObject = new GameObject("Canvas", typeof(RectTransform), typeof(Canvas), typeof(CanvasScaler), typeof(GraphicRaycaster));
+            Canvas canvas = canvasObject.GetComponent<Canvas>();
+            canvas.renderMode = RenderMode.ScreenSpaceOverlay;
 
-        private void Update()
-        {
-            웨이브타이머갱신();
-        }
+            CanvasScaler scaler = canvasObject.GetComponent<CanvasScaler>();
+            scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
+            scaler.screenMatchMode = CanvasScaler.ScreenMatchMode.MatchWidthOrHeight;
 
-        /// <summary>
-        /// 각 시스템의 이벤트를 구독한다.
-        /// </summary>
-        private void 이벤트구독()
-        {
-            if (GoldSystem.인스턴스 != null)
-                GoldSystem.인스턴스.골드변경이벤트 += 골드UI갱신;
+            // 화면 방향에 따라 기준 해상도를 맞춰 비율 찌그러짐을 줄입니다.
+            bool isLandscape = Screen.width >= Screen.height;
+            scaler.referenceResolution = isLandscape
+                ? new Vector2(1920f, 1080f)
+                : new Vector2(1080f, 1920f);
+            scaler.matchWidthOrHeight = 0.5f;
 
-            if (GameManager.인스턴스 != null)
+            if (FindObjectOfType<UnityEngine.EventSystems.EventSystem>() == null)
             {
-                GameManager.인스턴스.HP변경이벤트 += HPUI갱신;
-                GameManager.인스턴스.게임상태변경이벤트 += 게임상태UI갱신;
+                new GameObject("EventSystem",
+                    typeof(UnityEngine.EventSystems.EventSystem),
+                    typeof(UnityEngine.EventSystems.StandaloneInputModule));
             }
 
-            if (WaveManager.인스턴스 != null)
-                WaveManager.인스턴스.웨이브변경이벤트 += 웨이브UI갱신;
-
-            if (TraitSystem.인스턴스 != null)
-                TraitSystem.인스턴스.시너지변경이벤트 += 시너지UI갱신;
-
-            // 버튼 이벤트 연결
-            소환버튼?.onClick.AddListener(() => GameManager.인스턴스?.영웅소환());
-            일시정지버튼?.onClick.AddListener(일시정지버튼클릭);
-            게임시작버튼?.onClick.AddListener(() => GameManager.인스턴스?.게임시작());
+            return canvas;
         }
 
-        /// <summary>
-        /// 이벤트 구독을 해제한다.
-        /// </summary>
-        private void 이벤트해제()
+        private RectTransform TopBar생성(Transform parent)
         {
-            if (GoldSystem.인스턴스 != null)
-                GoldSystem.인스턴스.골드변경이벤트 -= 골드UI갱신;
-
-            if (GameManager.인스턴스 != null)
-            {
-                GameManager.인스턴스.HP변경이벤트 -= HPUI갱신;
-                GameManager.인스턴스.게임상태변경이벤트 -= 게임상태UI갱신;
-            }
-
-            if (WaveManager.인스턴스 != null)
-                WaveManager.인스턴스.웨이브변경이벤트 -= 웨이브UI갱신;
-
-            if (TraitSystem.인스턴스 != null)
-                TraitSystem.인스턴스.시너지변경이벤트 -= 시너지UI갱신;
+            GameObject topBar = 패널생성(parent, "TopBar", new Color(0.10f, 0.18f, 0.40f, 0.90f), 1080f, 140f, new Vector2(0.5f, 1f), new Vector2(0f, 0f));
+            return topBar.GetComponent<RectTransform>();
         }
 
-        /// <summary>
-        /// 초기 UI 값을 설정한다.
-        /// </summary>
-        private void 초기UI설정()
+        private RectTransform BottomUI생성(Transform parent)
         {
-            게임오버패널?.SetActive(false);
-            일시정지패널?.SetActive(false);
-
-            if (GoldSystem.인스턴스 != null)
-            {
-                골드UI갱신(GoldSystem.인스턴스.현재골드);
-                소환비용텍스트?.SetText($"소환 비용: {GoldSystem.인스턴스.현재소환비용}G");
-            }
-
-            if (GameManager.인스턴스 != null)
-                HPUI갱신(GameManager.인스턴스.현재플레이어HP, GameManager.인스턴스.최대플레이어HP);
+            GameObject bar = 패널생성(parent, "BottomUI", new Color(0.08f, 0.13f, 0.24f, 0.88f), 1080f, 200f, new Vector2(0.5f, 0f), new Vector2(0f, 0f));
+            return bar.GetComponent<RectTransform>();
         }
 
-        /// <summary>골드 UI를 갱신한다.</summary>
-        private void 골드UI갱신(int 골드)
+        private RectTransform SummonButton생성(Transform parent)
         {
-            골드텍스트?.SetText($"골드: {골드}G");
+            GameObject buttonObj = new GameObject("SummonButton", typeof(RectTransform), typeof(Image), typeof(Button));
+            buttonObj.transform.SetParent(parent, false);
 
-            if (GoldSystem.인스턴스 != null)
-                소환비용텍스트?.SetText($"소환 비용: {GoldSystem.인스턴스.현재소환비용}G");
+            RectTransform rect = buttonObj.GetComponent<RectTransform>();
+            rect.anchorMin = new Vector2(0.5f, 0f);
+            rect.anchorMax = new Vector2(0.5f, 0f);
+            rect.pivot = new Vector2(0.5f, 0.5f);
+            rect.sizeDelta = new Vector2(460f, 118f);
+            rect.anchoredPosition = new Vector2(0f, 100f);
+
+            Image image = buttonObj.GetComponent<Image>();
+            image.color = new Color(0.95f, 0.76f, 0.20f, 0.98f);
+
+            Text label = 텍스트생성(rect, "Label", "소환", 42, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(280f, 70f), Color.black);
+            _ = label;
+
+            Button button = buttonObj.GetComponent<Button>();
+            button.onClick.AddListener(() => 소환버튼클릭이벤트?.Invoke());
+            return rect;
         }
 
-        /// <summary>HP UI를 갱신한다.</summary>
-        private void HPUI갱신(int 현재, int 최대)
+        private void 게임오버패널생성(Transform parent)
         {
-            if (HP슬라이더 != null)
-            {
-                HP슬라이더.maxValue = 최대;
-                HP슬라이더.value = 현재;
-            }
-            HP텍스트?.SetText($"{현재} / {최대}");
+            _gameOverPanel = new GameObject("GameOverPanel", typeof(RectTransform), typeof(Image));
+            _gameOverPanel.transform.SetParent(parent, false);
+
+            RectTransform panelRect = _gameOverPanel.GetComponent<RectTransform>();
+            panelRect.anchorMin = new Vector2(0.5f, 0.5f);
+            panelRect.anchorMax = new Vector2(0.5f, 0.5f);
+            panelRect.pivot = new Vector2(0.5f, 0.5f);
+            panelRect.sizeDelta = new Vector2(820f, 540f);
+
+            Image panelImage = _gameOverPanel.GetComponent<Image>();
+            panelImage.color = new Color(0f, 0f, 0f, 0.72f);
+
+            _gameOverText = 텍스트생성(_gameOverPanel.transform, "GameOverText", "GAME OVER", 96, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(760f, 180f), new Color(1f, 0.32f, 0.32f, 1f), new Vector2(0f, 90f));
+
+            GameObject buttonObj = new GameObject("MainMenuButton", typeof(RectTransform), typeof(Image), typeof(Button));
+            buttonObj.transform.SetParent(_gameOverPanel.transform, false);
+
+            RectTransform buttonRect = buttonObj.GetComponent<RectTransform>();
+            buttonRect.anchorMin = new Vector2(0.5f, 0.5f);
+            buttonRect.anchorMax = new Vector2(0.5f, 0.5f);
+            buttonRect.pivot = new Vector2(0.5f, 0.5f);
+            buttonRect.sizeDelta = new Vector2(360f, 108f);
+            buttonRect.anchoredPosition = new Vector2(0f, -110f);
+
+            Image buttonImage = buttonObj.GetComponent<Image>();
+            buttonImage.color = new Color(0.96f, 0.82f, 0.25f, 1f);
+
+            텍스트생성(buttonObj.transform, "Label", "메인 메뉴", 42, TextAnchor.MiddleCenter, new Vector2(0.5f, 0.5f), new Vector2(280f, 70f), Color.black);
+
+            _mainMenuButton = buttonObj.GetComponent<Button>();
+            _mainMenuButton.onClick.AddListener(() => 메인메뉴버튼클릭이벤트?.Invoke());
+
+            _gameOverPanel.SetActive(false);
         }
 
-        /// <summary>웨이브 UI를 갱신한다.</summary>
-        private void 웨이브UI갱신(int 웨이브)
+        private GameObject 패널생성(Transform parent, string name, Color color, float width, float height, Vector2 anchor, Vector2 anchoredPosition)
         {
-            웨이브텍스트?.SetText($"웨이브 {웨이브}");
+            GameObject obj = new GameObject(name, typeof(RectTransform), typeof(Image));
+            obj.transform.SetParent(parent, false);
+
+            RectTransform rect = obj.GetComponent<RectTransform>();
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = anchor;
+            rect.sizeDelta = new Vector2(width, height);
+            rect.anchoredPosition = anchoredPosition;
+
+            Image image = obj.GetComponent<Image>();
+            image.color = color;
+            return obj;
         }
 
-        /// <summary>시너지 UI를 갱신한다.</summary>
-        private void 시너지UI갱신(System.Collections.Generic.Dictionary<TraitType, int> 시너지목록)
+        private Text 텍스트생성(Transform parent, string name, string value, int fontSize, TextAnchor alignment, Vector2 anchor, Vector2 size, Color? color = null, Vector2? anchoredPos = null)
         {
-            if (TraitSystem.인스턴스 != null)
-                시너지텍스트?.SetText(TraitSystem.인스턴스.시너지상태문자열가져오기());
+            GameObject textObj = new GameObject(name, typeof(RectTransform), typeof(Text));
+            textObj.transform.SetParent(parent, false);
+
+            RectTransform rect = textObj.GetComponent<RectTransform>();
+            rect.anchorMin = anchor;
+            rect.anchorMax = anchor;
+            rect.pivot = anchor;
+            rect.sizeDelta = size;
+            rect.anchoredPosition = anchoredPos ?? Vector2.zero;
+
+            Text text = textObj.GetComponent<Text>();
+            text.font = Resources.GetBuiltinResource<Font>("LegacyRuntime.ttf");
+            text.fontSize = fontSize;
+            text.alignment = alignment;
+            text.color = color ?? Color.white;
+            text.text = value;
+            return text;
         }
 
-        /// <summary>게임 상태에 따라 UI 패널을 갱신한다.</summary>
-        private void 게임상태UI갱신(게임상태 상태)
+        public void 골드갱신(int gold)
         {
-            게임오버패널?.SetActive(상태 == 게임상태.게임오버);
-            일시정지패널?.SetActive(상태 == 게임상태.일시정지);
+            if (_goldText != null)
+                _goldText.text = $"Gold: {gold}";
         }
 
-        /// <summary>매 프레임 웨이브 타이머를 갱신한다.</summary>
-        private void 웨이브타이머갱신()
+        public void 웨이브갱신(int wave)
         {
-            if (WaveManager.인스턴스 == null) return;
-            웨이브타이머텍스트?.SetText($"다음 웨이브: {Mathf.CeilToInt(WaveManager.인스턴스.남은대기시간)}초");
+            if (_waveText != null)
+                _waveText.text = $"Wave: {wave}";
         }
 
-        /// <summary>일시정지 버튼 클릭 처리.</summary>
-        private void 일시정지버튼클릭()
+        public void 라이프갱신(int life)
         {
-            if (GameManager.인스턴스 == null) return;
+            if (_lifeText != null)
+                _lifeText.text = $"Life: {life}";
+        }
 
-            if (GameManager.인스턴스.현재상태 == 게임상태.진행중)
-                GameManager.인스턴스.일시정지();
-            else if (GameManager.인스턴스.현재상태 == 게임상태.일시정지)
-                GameManager.인스턴스.일시정지해제();
+        public void 소환버튼활성화(bool isEnabled)
+        {
+            if (_summonButton != null)
+                _summonButton.interactable = isEnabled;
+        }
+
+        public void 게임오버표시()
+        {
+            if (_gameOverPanel != null)
+                _gameOverPanel.SetActive(true);
+
+            if (_waveText != null)
+                _waveText.text = "Game Over";
+
+            if (_summonButton != null)
+                _summonButton.interactable = false;
         }
     }
 }
